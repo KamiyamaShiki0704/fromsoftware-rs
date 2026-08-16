@@ -1,7 +1,5 @@
 use std::{ffi::c_void, ptr::NonNull};
 
-use shared::OwnedPtr;
-
 use crate::dlkr::DLAllocator;
 
 impl fromsoftware_shared_stl::StlAllocator for &'static DLAllocator {
@@ -35,7 +33,7 @@ pub type UnkDLTree<V> =
 #[repr(C)]
 pub struct ChainingMap<K: Ord, V> {
     base: DLMap<K, NonNull<ChainingMapBucketEntry<V>>>,
-    buckets: OwnedPtr<ArrayWithHeader<ChainingMapBucketEntry<V>>>,
+    buckets: NonNull<ArrayWithHeader<ChainingMapBucketEntry<V>>>,
 }
 
 impl<K: Ord, V> ChainingMap<K, V> {
@@ -86,7 +84,7 @@ impl<K: Ord, V> ChainingMap<K, V> {
     }
 
     pub fn buckets(&self) -> &[ChainingMapBucketEntry<V>] {
-        unsafe { self.buckets.as_slice() }
+        unsafe { self.buckets.as_ref().as_slice() }
     }
 }
 
@@ -141,7 +139,7 @@ where
     pub data: [CSFixedListEntry<T>; N],
     unk1: u32,
     unk2: u32,
-    pub head_ptr: OwnedPtr<CSFixedListEntry<T>>,
+    pub head_ptr: NonNull<CSFixedListEntry<T>>,
     pub head: CSFixedListEntry<T>,
 }
 
