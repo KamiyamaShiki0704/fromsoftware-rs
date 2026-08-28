@@ -75,6 +75,13 @@ pub struct FieldInsHandle {
 }
 
 impl FieldInsHandle {
+    pub const fn none() -> Self {
+        Self {
+            selector: FieldInsSelector(u32::MAX),
+            block_id: BlockId::none(),
+        }
+    }
+
     pub fn is_empty(&self) -> bool {
         self.selector.0 == u32::MAX
     }

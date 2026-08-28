@@ -26,12 +26,17 @@ pub struct CSNowLoadingHelper {
     scaleform_replace_text_info: u64,
     unke0: u64,
     unke8: f32,
-    unkec: bool,
-    unked: bool,
-    unkee: bool,
-    unkef: bool,
+    /// Unknown loading-screen state flags. At least one of these is expected to be active while
+    /// the loading screen is still visible.
+    pub loading_flags: [bool; 4],
     unkf0: u32,
     unkf4: u32,
+}
+
+impl CSNowLoadingHelper {
+    pub fn is_loading_screen_active(&self) -> bool {
+        self.loading_flags.iter().any(|flag| *flag)
+    }
 }
 
 #[cfg(test)]

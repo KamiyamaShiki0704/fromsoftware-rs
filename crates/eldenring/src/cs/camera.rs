@@ -88,9 +88,9 @@ pub type CSPersCam = CSCam;
 #[derive(Subclass)]
 pub struct ChrCam {
     pub pers_cam: CSPersCam,
-    ex_follow_cam: OwnedPtr<CSPersCam>,
-    aim_cam: OwnedPtr<CSPersCam>,
-    dist_view_cam: OwnedPtr<CSPersCam>,
+    pub ex_follow_cam: OwnedPtr<CSPersCam>,
+    pub aim_cam: OwnedPtr<CSPersCam>,
+    pub dist_view_cam: OwnedPtr<CSPersCam>,
     /// Setting this to True will reset the camera to the default position.
     /// (behind player's back)
     pub request_camera_reset: bool,

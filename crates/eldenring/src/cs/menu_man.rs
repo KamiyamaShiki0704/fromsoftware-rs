@@ -152,7 +152,9 @@ pub struct BackScreenData {
 #[repr(C)]
 pub struct LoadingScreenData {
     vftable: usize,
-    unk8: [u8; 0x20],
+    unk8: [u8; 0xc],
+    pub timer: f32,
+    unk18: [u8; 0x10],
 }
 
 #[repr(C)]

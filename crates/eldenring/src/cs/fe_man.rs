@@ -142,6 +142,16 @@ pub struct SummonMsgData {
     unk49: [u8; 7],
 }
 
+impl SummonMsgData {
+    pub fn suppress(&mut self) {
+        self.priority = -1;
+        self.force_play = false;
+        self.text.static_string = std::ptr::null();
+        self.text.allocated_string.clear();
+        self.unk48 = false;
+    }
+}
+
 #[repr(C)]
 pub struct FrontEndView {
     menu_window: [u8; 0xa31],
@@ -264,6 +274,16 @@ pub struct CSFeSpiritAshDisplay {
     unkc: u32,
     pub hp_max_uncapped_difference: u32,
     pub hp_max_uncapped: u32,
+}
+
+impl CSFeSpiritAshDisplay {
+    pub fn suppress(&mut self) {
+        self.field_ins_handle = FieldInsHandle::none();
+        self.hp = 0;
+        self.unkc = 0;
+        self.hp_max_uncapped_difference = 0;
+        self.hp_max_uncapped = 0;
+    }
 }
 
 #[repr(C)]
