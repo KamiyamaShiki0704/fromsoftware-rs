@@ -14,6 +14,7 @@ use fromsoftware_shared::game_version::{GameVersion, LANG_ID_EN, LANG_ID_JP};
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum ERGameVersion {
     Ww2700,
+    Ww2710,
     Jp2701,
 }
 
@@ -23,6 +24,7 @@ impl GameVersion for ERGameVersion {
     fn from_lang_version(lang_id: u16, version: &str) -> Option<Self> {
         match (lang_id, version) {
             (LANG_ID_EN, "2.7.0.0") => Some(Self::Ww2700),
+            (LANG_ID_EN, "2.7.1.0") => Some(Self::Ww2710),
             (LANG_ID_JP, "2.7.0.1") => Some(Self::Jp2701),
             _ => None,
         }
@@ -33,6 +35,16 @@ impl ERGameVersion {
     const fn rvas(self) -> RvaBundle {
         match self {
             Self::Ww2700 => rva_ww::RVAS,
+            // Mapped from WW 1.17.1 (product version 2.7.1.0).
+            // All other entries match the WW 1.17 map.
+            Self::Ww2710 => RvaBundle {
+                register_task: 0xeb3e50,
+                cs_phys_world_cast_ray: 0xc71e00,
+                cs_ez_draw_draw_line: 0x2652640,
+                cs_ez_draw_draw_triangle: 0x2652390,
+                cs_ez_draw_draw_wedge: 0x2651f40,
+                ..rva_ww::RVAS
+            },
             Self::Jp2701 => rva_jp::RVAS,
         }
     }
@@ -52,4 +64,20 @@ pub fn get() -> &'static RvaBundle {
     });
 
     &RVAS
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn ww_1171_is_distinct_from_117_and_unknown_versions_are_rejected() {
+        let old = ERGameVersion::from_lang_version(LANG_ID_EN, "2.7.0.0").unwrap();
+        let new = ERGameVersion::from_lang_version(LANG_ID_EN, "2.7.1.0").unwrap();
+        assert_eq!(old.rvas().register_task, 0xeb3de0);
+        assert_eq!(new.rvas().register_task, 0xeb3e50);
+        assert_eq!(new.rvas().game_data_man, old.rvas().game_data_man);
+        assert!(ERGameVersion::from_lang_version(LANG_ID_EN, "2.7.2.0").is_none());
+        assert!(ERGameVersion::from_lang_version(LANG_ID_JP, "2.7.1.0").is_none());
+    }
 }
