@@ -17,6 +17,7 @@ enum ERGameVersion {
     Jp2621,
     Ww2700,
     Jp2701,
+    Ww2710,
 }
 
 impl GameVersion for ERGameVersion {
@@ -28,6 +29,7 @@ impl GameVersion for ERGameVersion {
             (LANG_ID_JP, "2.6.2.1") => Some(Self::Jp2621),
             (LANG_ID_EN, "2.7.0.0") => Some(Self::Ww2700),
             (LANG_ID_JP, "2.7.0.1") => Some(Self::Jp2701),
+            (LANG_ID_EN, "2.7.1.0") => Some(Self::Ww2710),
             _ => None,
         }
     }
@@ -40,6 +42,7 @@ impl ERGameVersion {
             Self::Jp2621 => rva_jp::RVAS_2621,
             Self::Ww2700 => rva_ww::RVAS_2700,
             Self::Jp2701 => rva_jp::RVAS_2701,
+            Self::Ww2710 => rva_ww::RVAS_2710,
         }
     }
 }
@@ -63,6 +66,43 @@ pub fn get() -> &'static RvaBundle {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn recognizes_1171_and_routes_changed_native_entries() {
+        let version = ERGameVersion::from_lang_version(LANG_ID_EN, "2.7.1.0")
+            .expect("verified WW 1.17.1 must be recognized");
+        let rvas = version.rvas();
+        assert_eq!(rvas.register_task, 0xeb3e50);
+        assert_eq!(rvas.cs_phys_world_cast_ray, 0xc71e00);
+        assert_eq!(rvas.cs_ez_draw_draw_line, 0x2652640);
+        assert_eq!(rvas.cs_ez_draw_draw_triangle, 0x2652390);
+        assert_eq!(rvas.cs_ez_draw_draw_wedge, 0x2651f40);
+        assert_eq!(rvas.cs_bullet_manager_spawn_bullet, 0x3a2cb0);
+        assert_eq!(rvas.chr_ins_apply_speffect, 0x3e8dc0);
+        assert_eq!(rvas.chr_ins_remove_speffect, 0x3ee2e0);
+    }
+
+    #[test]
+    fn retains_1170_entries_and_rejects_unverified_1171_regions() {
+        let old = ERGameVersion::Ww2700.rvas();
+        assert_eq!(old.register_task, 0xeb3de0);
+        assert_eq!(old.cs_phys_world_cast_ray, 0xc71d90);
+        assert_eq!(old.cs_ez_draw_draw_line, 0x26525d0);
+        assert_eq!(old.cs_ez_draw_draw_triangle, 0x2652320);
+        assert_eq!(old.cs_ez_draw_draw_wedge, 0x2651ed0);
+        assert_eq!(
+            ERGameVersion::from_lang_version(LANG_ID_JP, "2.7.1.0"),
+            None
+        );
+        assert_eq!(
+            ERGameVersion::from_lang_version(LANG_ID_JP, "2.7.1.1"),
+            None
+        );
+        assert_eq!(
+            ERGameVersion::from_lang_version(LANG_ID_EN, "2.7.1.1"),
+            None
+        );
+    }
 
     #[test]
     fn recognizes_retained_and_current_executable_versions() {
