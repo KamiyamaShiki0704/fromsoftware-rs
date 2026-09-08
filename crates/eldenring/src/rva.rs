@@ -14,6 +14,7 @@ use fromsoftware_shared::game_version::{GameVersion, LANG_ID_EN, LANG_ID_JP};
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum ERGameVersion {
     Ww2700,
+    Ww2710,
     Jp2701,
 }
 
@@ -23,6 +24,7 @@ impl GameVersion for ERGameVersion {
     fn from_lang_version(lang_id: u16, version: &str) -> Option<Self> {
         match (lang_id, version) {
             (LANG_ID_EN, "2.7.0.0") => Some(Self::Ww2700),
+            (LANG_ID_EN, "2.7.1.0") => Some(Self::Ww2710),
             (LANG_ID_JP, "2.7.0.1") => Some(Self::Jp2701),
             _ => None,
         }
@@ -33,6 +35,14 @@ impl ERGameVersion {
     const fn rvas(self) -> RvaBundle {
         match self {
             Self::Ww2700 => rva_ww::RVAS,
+            Self::Ww2710 => RvaBundle {
+                register_task: 0xeb3e50,
+                cs_phys_world_cast_ray: 0xc71e00,
+                cs_ez_draw_draw_line: 0x2652640,
+                cs_ez_draw_draw_triangle: 0x2652390,
+                cs_ez_draw_draw_wedge: 0x2651f40,
+                ..rva_ww::RVAS
+            },
             Self::Jp2701 => rva_jp::RVAS,
         }
     }
@@ -52,4 +62,41 @@ pub fn get() -> &'static RvaBundle {
     });
 
     &RVAS
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn routes_verified_1171_without_changing_1170() {
+        let current = ERGameVersion::from_lang_version(LANG_ID_EN, "2.7.1.0")
+            .unwrap()
+            .rvas();
+        let previous = ERGameVersion::from_lang_version(LANG_ID_EN, "2.7.0.0")
+            .unwrap()
+            .rvas();
+        assert_eq!(current.register_task, 0xeb3e50);
+        assert_eq!(previous.register_task, 0xeb3de0);
+        assert_eq!(current.cs_phys_world_cast_ray, 0xc71e00);
+        assert_eq!(current.cs_ez_draw_draw_line, 0x2652640);
+        assert_eq!(current.cs_ez_draw_draw_triangle, 0x2652390);
+        assert_eq!(current.cs_ez_draw_draw_wedge, 0x2651f40);
+        assert_eq!(
+            current.chr_ins_apply_speffect,
+            previous.chr_ins_apply_speffect
+        );
+        assert_eq!(
+            current.chr_ins_remove_speffect,
+            previous.chr_ins_remove_speffect
+        );
+        assert_eq!(
+            ERGameVersion::from_lang_version(LANG_ID_JP, "2.7.1.1"),
+            None
+        );
+        assert_eq!(
+            ERGameVersion::from_lang_version(LANG_ID_EN, "2.8.0.0"),
+            None
+        );
+    }
 }
