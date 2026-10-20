@@ -298,6 +298,9 @@ pub struct ChrIns {
     unk3a0: usize,
     anim_skeleton_to_model_modifier: usize,
     unk3b0: usize,
+    // Retained native slot: omitting it shifts all six tasks and debug flags.
+    // Matches the newer fsrs binding and the existing Summon/Demon ABI probes.
+    unk3b8: usize,
     cloth_state: [u8; 0x30],
     unk3e8: u32,
     unk3ec: u32,
@@ -331,7 +334,7 @@ pub struct ChrIns {
     pub hit_material_override: i32,
     unk540: u32,
     pub debug_role_param_id: i32,
-    unk548: [u8; 0x38],
+    unk548: [u8; 0x30],
 }
 
 #[for_all_subclasses]

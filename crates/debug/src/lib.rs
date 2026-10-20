@@ -31,6 +31,27 @@ pub fn initialize<T>(
 where
     T: Hooks + 'static,
 {
+    initialize_checked::<T>(
+        hmodule,
+        reason,
+        move || {
+            wait_for_system_init();
+            Ok(())
+        },
+        render_loop,
+    )
+}
+
+/// A rejected game identity/readiness check must prevent render-hook setup.
+pub fn initialize_checked<T>(
+    hmodule: HINSTANCE,
+    reason: u32,
+    wait_for_system_init: impl FnOnce() -> Result<(), String> + Send + 'static,
+    render_loop: impl ImguiRenderLoop + Send + Sync + 'static,
+) -> i32
+where
+    T: Hooks + 'static,
+{
     if reason != DLL_PROCESS_ATTACH {
         return 1;
     }
@@ -48,7 +69,10 @@ where
     let hmodule_raw = hmodule.0 as usize;
 
     std::thread::spawn(move || {
-        wait_for_system_init();
+        if let Err(error) = wait_for_system_init() {
+            tracing::error!("Game initialization rejected: {error}");
+            return;
+        }
 
         if let Err(e) = Hudhook::builder()
             .with::<T>(render_loop)

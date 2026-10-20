@@ -308,7 +308,7 @@ pattern = "ba 1c 00 00 00 48 8b ce 84 c0 74 ? e8 $ { ' } eb ?"
 captures = ["", "chr_ins_remove_speffect"]
 
 [[patterns]]
-pattern = "88 44 24 28 0f b6 84 24 c0 00 00 00 88 44 24 20 e8 $ { ' }"
+pattern = "88 44 24 28 0f b6 84 24 c0 00 00 00 88 44 24 20 e8 $ { ' 48 8b c4 55 41 54 41 55 41 56 41 57 }"
 captures = ["", "cs_action_button_man_execute_action_button"]
 
 [[patterns]]
@@ -341,7 +341,7 @@ pattern = "48 89 05 ${ ' } 48 83 c4 38 e9 ${}"
 
 [[patterns]]
 captures = ["", "crypto_spi_registry"]
-pattern = "e8 $ { 48 89 4c 24 08 55 56 57 48 83 ec 30 } eb ? 33 c0 48 89 05 $ { ' }"
+pattern = "e8 $ { 48 89 4c 24 08 55 56 57 48 83 ec 30 [17] 48 8d 05 } eb ? 33 c0 48 89 05 $ { ' }"
 
 [[patterns]]
 captures = ["", "world_chr_man_dbg_flags"]

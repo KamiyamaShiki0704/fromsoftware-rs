@@ -1,11 +1,27 @@
 use pelite::pe64::PeView;
+use sha2::{Digest, Sha256};
 use std::sync::LazyLock;
+use std::sync::atomic::{AtomicBool, Ordering};
 use windows::Win32::System::LibraryLoader::GetModuleHandleA;
 use windows::core::PCSTR;
+
+/// Exact WW1.17.2 identity; adding a version string alone cannot admit a changed file.
+pub fn verify_ww272_file(bytes: &[u8]) -> bool {
+    bytes.len() == 86_973_008
+        && format!("{:x}", Sha256::digest(bytes))
+            == "f9118fea2cfd8fa3901e8060bfadb1552cb2471771ded8a5b662c4e298ffb328"
+}
 
 mod bundle;
 mod rva_jp;
 mod rva_ww;
+
+// Published before a task receives bindings. Owned offline struct fixtures keep
+// the legacy layout unless they explicitly test the pure offset selector.
+static WW272_SELECTED: AtomicBool = AtomicBool::new(false);
+pub(crate) fn ww272_selected() -> bool {
+    WW272_SELECTED.load(Ordering::Acquire)
+}
 
 pub use bundle::RvaBundle;
 
@@ -18,6 +34,7 @@ enum ERGameVersion {
     Ww2700,
     Jp2701,
     Ww2710,
+    Ww2720,
 }
 
 impl GameVersion for ERGameVersion {
@@ -30,6 +47,7 @@ impl GameVersion for ERGameVersion {
             (LANG_ID_EN, "2.7.0.0") => Some(Self::Ww2700),
             (LANG_ID_JP, "2.7.0.1") => Some(Self::Jp2701),
             (LANG_ID_EN, "2.7.1.0") => Some(Self::Ww2710),
+            (LANG_ID_EN, "2.7.2.0") => Some(Self::Ww2720),
             _ => None,
         }
     }
@@ -43,6 +61,7 @@ impl ERGameVersion {
             Self::Ww2700 => rva_ww::RVAS_2700,
             Self::Jp2701 => rva_jp::RVAS_2701,
             Self::Ww2710 => rva_ww::RVAS_2710,
+            Self::Ww2720 => rva_ww::RVAS_2720,
         }
     }
 }
@@ -50,22 +69,57 @@ impl ERGameVersion {
 /// Returns the RVA bundle for the current executable region and version.
 ///
 /// This will panic if the current executable isn't supported by this package.
-pub fn get() -> &'static RvaBundle {
-    static RVAS: LazyLock<RvaBundle> = LazyLock::new(|| {
-        let module = unsafe {
-            PeView::module(GetModuleHandleA(PCSTR(std::ptr::null())).unwrap().0 as *const u8)
-        };
-        ERGameVersion::detect(&module)
-            .unwrap_or_else(|e| panic!("{e}"))
-            .rvas()
+pub fn try_get() -> Result<&'static RvaBundle, &'static str> {
+    static RVAS: LazyLock<Result<RvaBundle, String>> = LazyLock::new(|| {
+        let handle =
+            unsafe { GetModuleHandleA(PCSTR(std::ptr::null())) }.map_err(|e| e.to_string())?;
+        let module = unsafe { PeView::module(handle.0 as *const u8) };
+        let version = ERGameVersion::detect(&module).map_err(|e| e.to_string())?;
+        if version == ERGameVersion::Ww2720 {
+            let path = std::env::current_exe().map_err(|e| e.to_string())?;
+            let bytes = std::fs::read(path).map_err(|e| e.to_string())?;
+            if !verify_ww272_file(&bytes) {
+                return Err("unverified WW2.7.2 executable; no RVA bindings supplied".into());
+            }
+            WW272_SELECTED.store(true, Ordering::Release);
+        }
+        Ok(version.rvas())
     });
+    RVAS.as_ref().map_err(String::as_str)
+}
 
-    &RVAS
+pub fn get() -> &'static RvaBundle {
+    try_get().unwrap_or_else(|error| panic!("{error}"))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn recognizes_1172_without_changing_1171() {
+        let current = ERGameVersion::from_lang_version(LANG_ID_EN, "2.7.2.0")
+            .unwrap()
+            .rvas();
+        assert_eq!(current.register_task, 0xeb5540);
+        assert_eq!(current.game_data_man, 0x3d64fb8);
+        assert_eq!(ERGameVersion::Ww2710.rvas().register_task, 0xeb3e50);
+        assert!(ERGameVersion::from_lang_version(LANG_ID_EN, "2.7.3.0").is_none());
+        assert!(ERGameVersion::from_lang_version(LANG_ID_JP, "2.7.2.1").is_none());
+        assert!(!verify_ww272_file(&[]));
+        assert!(!verify_ww272_file(&[0; 4096]));
+    }
+
+    #[test]
+    fn installed_1172_identity_rejects_corruption_when_supplied() {
+        let Some(path) = std::env::var_os("ER_GAME_EXE") else {
+            return;
+        };
+        let mut bytes = std::fs::read(path).unwrap();
+        assert!(verify_ww272_file(&bytes));
+        bytes[0x400] ^= 1;
+        assert!(!verify_ww272_file(&bytes));
+    }
 
     #[test]
     fn recognizes_1171_and_routes_changed_native_entries() {

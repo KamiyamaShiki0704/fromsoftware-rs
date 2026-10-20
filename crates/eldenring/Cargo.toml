@@ -8,6 +8,7 @@ readme = false
 description = "Structures, bindings, and utilities for From Software's title Elden Ring"
 
 [dependencies]
+sha2 = "0.10.9"
 fromsoftware-shared.workspace = true
 thiserror.workspace = true
 glam.workspace = true

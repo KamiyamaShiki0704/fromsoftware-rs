@@ -43,6 +43,10 @@ struct MapArgs {
 
     #[arg(long, env("MAPPER_OUTPUT_FORMAT"))]
     output: OutputFormat,
+
+    /// Refuse differing named captures instead of emitting the legacy first candidate.
+    #[arg(long)]
+    strict: bool,
 }
 
 /// Shortcut to map all files for Elden Ring.
@@ -106,6 +110,7 @@ fn main() {
                         args.output.to_possible_value().unwrap().get_name()
                     )
                 }),
+                args.strict,
             );
 
             match args.output {
@@ -125,12 +130,12 @@ fn main() {
             fs::write(er.join("src/rva/bundle.rs"), generate_rust_struct(&profile)).unwrap();
             fs::write(
                 er.join("src/rva/rva_ww.rs"),
-                generate_rust_instance(&map_results(&profile, &args.ww_exe)),
+                generate_rust_instance(&map_results(&profile, &args.ww_exe, false)),
             )
             .unwrap();
             fs::write(
                 er.join("src/rva/rva_jp.rs"),
-                generate_rust_instance(&map_results(&profile, &args.jp_exe)),
+                generate_rust_instance(&map_results(&profile, &args.jp_exe, false)),
             )
             .unwrap();
             cargo_fmt(&er);
@@ -150,12 +155,12 @@ fn main() {
             .unwrap();
             fs::write(
                 ds3.join("src/rva/rva_ww.rs"),
-                generate_rust_instance(&map_results(&profile, &args.ww_exe)),
+                generate_rust_instance(&map_results(&profile, &args.ww_exe, false)),
             )
             .unwrap();
             fs::write(
                 ds3.join("src/rva/rva_jp.rs"),
-                generate_rust_instance(&map_results(&profile, &args.jp_exe)),
+                generate_rust_instance(&map_results(&profile, &args.jp_exe, false)),
             )
             .unwrap();
             cargo_fmt(&ds3);
@@ -175,7 +180,7 @@ fn main() {
             .unwrap();
             fs::write(
                 sdt.join("src/rva/rva_data.rs"),
-                generate_rust_instance(&map_results(&profile, &args.exe)),
+                generate_rust_instance(&map_results(&profile, &args.exe, false)),
             )
             .unwrap();
             cargo_fmt(&sdt);
@@ -220,7 +225,7 @@ fn cargo_fmt<P: AsRef<Path>>(path: P) {
 }
 
 /// Loads the results for `profile` from the binary at `exe`.
-fn map_results(profile: &MapperProfile, exe: &Path) -> Vec<MapperEntryResult> {
+fn map_results(profile: &MapperProfile, exe: &Path, strict: bool) -> Vec<MapperEntryResult> {
     let exe_file = File::open(exe).expect("Could not open game binary");
     let exe_mmap =
         unsafe { MmapOptions::new().map(&exe_file) }.expect("Could not mmap game binary");
@@ -233,7 +238,7 @@ fn map_results(profile: &MapperProfile, exe: &Path) -> Vec<MapperEntryResult> {
     let mut results = profile
         .patterns
         .par_iter()
-        .flat_map(|entry| entry.find(&program))
+        .flat_map(|entry| entry.find(&program, strict))
         .chain(
             profile
                 .vmts
@@ -332,27 +337,45 @@ struct MapperProfilePattern {
 
 impl MapperProfilePattern {
     /// Consumes self and looks up the pattern in `program`.
-    fn find<'a>(&self, program: &impl Pe<'a>) -> Vec<MapperEntryResult> {
+    fn find<'a>(&self, program: &impl Pe<'a>, strict: bool) -> Vec<MapperEntryResult> {
         let Ok(scanner_pattern) = pattern::parse(&self.pattern) else {
             panic!("Could not parse provided pattern \"{}\"", &self.pattern)
         };
 
         let mut matches = vec![0u32; self.captures.len()];
+        let mut first: Option<Vec<u32>> = None;
+        let mut count = 0;
+        let mut scanner = program.scanner().matches_code(&scanner_pattern);
+        while scanner.next(&mut matches) {
+            count += 1;
+            if let Some(previous) = &first {
+                if !named_captures_agree(&self.captures, previous, &matches) {
+                    eprintln!(
+                        "[ambiguous-targets] {:?}: {:?} versus {:?}",
+                        self.captures, previous, matches
+                    );
+                    assert!(!strict, "Ambiguous named targets for {:?}", self.captures);
+                }
+            } else {
+                first = Some(matches.clone());
+            }
+        }
+        eprintln!(
+            "[target-uniqueness] {:?}: {count} source matches",
+            self.captures
+        );
         let captures = self
             .captures
             .iter()
             .enumerate()
             .filter(|(_, e)| !e.is_empty());
 
-        if !program
-            .scanner()
-            .matches_code(&scanner_pattern)
-            .next(&mut matches)
-        {
+        if first.is_none() {
             captures
                 .map(|(_, e)| MapperEntryResult::not_found(e))
                 .collect::<Vec<_>>()
         } else {
+            let matches = first.unwrap();
             captures
                 .map(|(i, e)| MapperEntryResult {
                     name: e.clone(),
@@ -360,6 +383,29 @@ impl MapperProfilePattern {
                 })
                 .collect::<Vec<_>>()
         }
+    }
+}
+
+fn named_captures_agree(names: &[String], first: &[u32], next: &[u32]) -> bool {
+    names
+        .iter()
+        .enumerate()
+        .all(|(i, name)| name.is_empty() || first[i] == next[i])
+}
+
+#[cfg(test)]
+mod target_uniqueness_tests {
+    use super::named_captures_agree;
+    #[test]
+    fn distinct_call_sites_can_share_one_target_but_distinct_targets_are_refused() {
+        let names = vec![String::new(), "target".into()];
+        assert!(named_captures_agree(&names, &[0x10, 0x20], &[0x99, 0x20]));
+        assert!(!named_captures_agree(&names, &[0x10, 0x20], &[0x10, 0x21]));
+        assert!(!named_captures_agree(
+            &["function".into()],
+            &[0x10],
+            &[0x20]
+        ));
     }
 }
 

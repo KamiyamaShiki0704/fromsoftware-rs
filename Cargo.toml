@@ -50,7 +50,7 @@ darksouls3 = { path = "crates/darksouls3", version = "0.14.0", package = "darkso
 nightreign = { path = "crates/nightreign", version = "0.14.0", package = "nightreign" }
 sekiro = { path = "crates/sekiro", version = "0.14.0", package = "sekiro" }
 debug = { path = "crates/debug", version = "0.14.0", package = "debug" }
-binary_mapper = { path = "crates/binary-mapper" }
+binary_mapper = { path = "tools/binary-mapper", package = "binary-mapper" }
 bitflags = "2.11.0"
 thiserror = "1"
 tracing = "0.1"

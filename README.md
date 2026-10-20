@@ -1,3 +1,5 @@
+> Local 2026-10-21 compatibility branch: separate WW2.7.2.0 bindings and strict executable identity support the current FSTool consumers. Existing version tables remain. The full mapper audit retains one ambiguous generic `fd4param_repository_vmt` field, unused by the current DLL call paths; do not treat this delivery as verification of every SDK API. Current consumer scope and evidence: [build record](../../Topics/Gameplay/bug-er-1-17-2-dll-compat/build.md).
+
 # FromSoftware-rs 🔩  From Software runtime rust bindings
 
 Rust bindings to facilitate mod creation for From Software games.

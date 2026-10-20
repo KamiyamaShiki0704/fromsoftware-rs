@@ -119,6 +119,44 @@ pub struct WorldChrMan {
 }
 
 impl WorldChrMan {
+    /// Versioned tail access. The public repr(C) fields retain the legacy ABI;
+    /// WW272 inserted 16 bytes after the network tail. Consumers must use these
+    /// accessors for the affected fields, after SDK task binding initialization.
+    pub fn debug_chr_creator(&self) -> &OwnedPtr<CSDebugChrCreator> {
+        unsafe {
+            &*((self as *const Self as usize + world_chr_man_field_offset(0x1e648))
+                as *const OwnedPtr<CSDebugChrCreator>)
+        }
+    }
+
+    pub fn debug_chr_creator_mut(&mut self) -> &mut OwnedPtr<CSDebugChrCreator> {
+        unsafe {
+            &mut *((self as *mut Self as usize + world_chr_man_field_offset(0x1e648))
+                as *mut OwnedPtr<CSDebugChrCreator>)
+        }
+    }
+
+    pub fn chr_cam(&self) -> Option<NonNull<ChrCam>> {
+        unsafe {
+            *((self as *const Self as usize + world_chr_man_field_offset(0x1ece0))
+                as *const Option<NonNull<ChrCam>>)
+        }
+    }
+
+    pub fn chr_inses_by_distance(&self) -> &DLVector<ChrInsDistanceEntry> {
+        unsafe {
+            &*((self as *const Self as usize + world_chr_man_field_offset(0x1f1d0))
+                as *const DLVector<ChrInsDistanceEntry>)
+        }
+    }
+
+    pub fn chr_inses_by_update_priority(&self) -> &DLVector<NonNull<ChrIns>> {
+        unsafe {
+            &*((self as *const Self as usize + world_chr_man_field_offset(0x1f200))
+                as *const DLVector<NonNull<ChrIns>>)
+        }
+    }
+
     pub fn chr_ins_by_handle(&self, handle: &FieldInsHandle) -> Option<&ChrIns> {
         let chr_set_index = handle.selector.container() as usize;
         let chr_set = self.chr_sets.get(chr_set_index)?.as_ref()?;
@@ -140,23 +178,44 @@ impl WorldChrMan {
 
         name_bytes.resize(0x20, 0x0);
 
-        self.debug_chr_creator
+        self.debug_chr_creator_mut()
             .init_data
             .name
             .clone_from_slice(name_bytes.as_mut());
 
-        self.debug_chr_creator.init_data.chara_init_param_id = request.chara_init_param_id;
-        self.debug_chr_creator.init_data.npc_param_id = request.npc_param_id;
-        self.debug_chr_creator.init_data.npc_think_param_id = request.npc_think_param_id;
-        self.debug_chr_creator.init_data.event_entity_id = request.event_entity_id;
-        self.debug_chr_creator.init_data.talk_id = request.talk_id;
-        self.debug_chr_creator.init_data.is_player = request.is_player;
+        self.debug_chr_creator_mut().init_data.chara_init_param_id = request.chara_init_param_id;
+        self.debug_chr_creator_mut().init_data.npc_param_id = request.npc_param_id;
+        self.debug_chr_creator_mut().init_data.npc_think_param_id = request.npc_think_param_id;
+        self.debug_chr_creator_mut().init_data.event_entity_id = request.event_entity_id;
+        self.debug_chr_creator_mut().init_data.talk_id = request.talk_id;
+        self.debug_chr_creator_mut().init_data.is_player = request.is_player;
 
-        self.debug_chr_creator.init_data.spawn_position =
+        self.debug_chr_creator_mut().init_data.spawn_position =
             F32Vector4(request.pos_x, request.pos_y, request.pos_z, 0.0);
 
-        self.debug_chr_creator.spawn = true;
+        self.debug_chr_creator_mut().spawn = true;
     }
+}
+
+/// Only fields traced through independent native consumers are selected here.
+pub const fn world_chr_man_field_offset_for_version(legacy: usize, ww272: bool) -> usize {
+    if ww272 {
+        match legacy {
+            0x1e648 => 0x1e658,
+            0x1e6a8 => 0x1e6b8,
+            0x1ece0 => 0x1ecf0,
+            0x1f1b0 => 0x1f1c0,
+            0x1f1d0 => 0x1f1e0,
+            0x1f200 => 0x1f210,
+            _ => legacy,
+        }
+    } else {
+        legacy
+    }
+}
+
+pub fn world_chr_man_field_offset(legacy: usize) -> usize {
+    world_chr_man_field_offset_for_version(legacy, crate::rva::ww272_selected())
 }
 
 pub struct ChrDebugSpawnRequest {
@@ -671,6 +730,30 @@ mod test {
     use std::mem::size_of;
 
     use crate::cs::*;
+
+    #[test]
+    fn world_tail_layout_preserves_legacy_and_selects_verified_272_fields() {
+        assert_eq!(
+            std::mem::offset_of!(WorldChrMan, debug_chr_creator),
+            0x1e648
+        );
+        assert_eq!(std::mem::offset_of!(WorldChrMan, chr_cam), 0x1ece0);
+        assert_eq!(
+            world_chr_man_field_offset_for_version(0x1e508, true),
+            0x1e508
+        );
+        for (old, new) in [
+            (0x1e648, 0x1e658),
+            (0x1e6a8, 0x1e6b8),
+            (0x1ece0, 0x1ecf0),
+            (0x1f1b0, 0x1f1c0),
+            (0x1f1d0, 0x1f1e0),
+            (0x1f200, 0x1f210),
+        ] {
+            assert_eq!(world_chr_man_field_offset_for_version(old, false), old);
+            assert_eq!(world_chr_man_field_offset_for_version(old, true), new);
+        }
+    }
 
     #[test]
     fn proper_sizes() {
